@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
+import torchtext.utils as tutils
 import json
 
 # Define the Generator model
@@ -81,7 +82,7 @@ def fhir_resource_to_tensor(fhir_resource_json, fhir_resource, fhir_profile_reso
                 tensor[0,i] = torch.tensor(len(date_to_one_hot(value)))
             elif element.get('type')[0].get('code') == 'CodeableConcept':
                 tensor[0,i] = torch.tensor(len(value))
-            else:
+            else:  #if its a value from a valueset, get the index of the value gtom the FHIR valuesets
                 tensor[0,i] = torch.tensor(get_concept_index_from_codesystem(fhir_value_set, element['binding'].get('valueSet').split('|')[0], value))
         else:
             tensor[0,i] = -1
@@ -154,6 +155,7 @@ for epoch in range(num_epochs):
         real_output = discriminator(real_data)
         real_loss = criterion(real_output, real_labels)
         real_loss.backward()
+        real_cpu = real_data[0].to(device)
 
         # Train discriminator with generated data
         noise = torch.randn(batch_size, input_dim).to(device)
@@ -173,13 +175,16 @@ for epoch in range(num_epochs):
         generator_loss.backward()
         generator_optimizer.step()
 
-        if batch_idx % 100 == 0:
-            print(
-                f"Epoch [{epoch + 1}/{num_epochs}], "
-                f"Batch [{batch_idx}/{len(dataloader)}], "
-                f"Discriminator Loss: {discriminator_loss.item():.4f}, "
-                f"Generator Loss: {generator_loss.item():.4f}"
-            )
+
+        print(
+            f"Epoch [{epoch + 1}/{num_epochs}], "
+            f"Batch [{batch_idx}/{len(dataloader)}], "
+            f"Discriminator Loss: {discriminator_loss.item():.4f}, "
+            f"Generator Loss: {generator_loss.item():.4f}"
+        )
+        # Print the generated text after each epoch
+        generated_text = noise[0].detach().cpu().numpy()  # Convert tensor to numpy array
+        print(f"Epoch [{epoch+1}/{num_epochs}], Generated Text: {generated_text}")
 
 # Save trained models
 torch.save(generator.state_dict(), 'generator.pth')
