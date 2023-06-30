@@ -84,7 +84,7 @@ def fhir_resource_to_tensor(fhir_resource_json, fhir_resource, fhir_profiles_res
         else:
             tensor[0,i] = -1
 
-    return tensor
+    return tensor.to(device)
 
 def date_to_one_hot(date):
     # Split the date string into year, month, and day components
@@ -131,8 +131,8 @@ batch_size = 64  # Batch size for training
 device = torch.device("cuda:0")
 
 # Initialize generator and discriminator
-generator = Generator(input_dim, output_dim)#.to(device)
-discriminator = Discriminator(output_dim)#.to(device)
+generator = Generator(input_dim, output_dim).to(device)
+discriminator = Discriminator(output_dim).to(device)
 
 # Define loss function and optimizers
 criterion = nn.BCELoss()
@@ -148,7 +148,6 @@ num_epochs = 100
 for epoch in range(num_epochs):
     for batch_idx, real_data in enumerate(dataloader):
         batch_size = real_data.size(0)
-
         # Train discriminator with real data
         discriminator.zero_grad()
         real_labels = torch.ones(batch_size, 1)
