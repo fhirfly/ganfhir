@@ -50,7 +50,8 @@ class FHIRDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, index):
-        return fhir_resource_to_tensor(self.data[index], self.data[index].get('resourceType'), fhir_profiles_resources_json, fhir_value_set)  # Assuming each line is a tensor
+        fhir_profile_resource = resource_from_profile(self.data[index].get('resourceType'), fhir_profiles_resources_json)
+        return fhir_resource_to_tensor(self.data[index], self.data[index].get('resourceType'), fhir_profile_resource, fhir_value_set)  # Assuming each line is a tensor
 
 def resource_from_profile(fhir_resource, fhir_profiles_resources):
     for i, resource in enumerate(fhir_profiles_resources['entry']):
@@ -58,15 +59,16 @@ def resource_from_profile(fhir_resource, fhir_profiles_resources):
             return resource
 
 #Convert FHIR to Tensor
-def fhir_resource_to_tensor(fhir_resource_json, fhir_resource, fhir_profiles_resources, fhir_value_set):
+def fhir_resource_to_tensor(fhir_resource_json, fhir_resource, fhir_profile_resource, fhir_value_set):
     # Parse the FHIR resource
     #fhir_resource = fhir_types.fhir_resource(fhir_resource)
 
     # Get the list of elements from the StructureDefinition for the current resource type
-    fhir_profile_resource = resource_from_profile(fhir_resource, fhir_profiles_resources)
+    
     elements = fhir_profile_resource['resource'].get('differential')['element'][1:]  #the first elelemt is the resource itself, so skip that
     # Create an empty tensor with the shape of the elements
     tensor_shape = (1, len(elements))
+    output_dim = len(elements)
     tensor = torch.empty(tensor_shape)      
     # Iterate through the elements and populate the tensor
     for i, element in enumerate(elements):
@@ -114,17 +116,15 @@ def get_concept_index_from_codesystem(fhir_value_set, fhir_value_set_url, concep
                     return concept_index
                 concept_index +=1
 
-
 with open('fhir/valuesets.json', encoding='utf8', mode='r') as f: 
     fhir_value_set = json.load(f)
 
 with open('fhir/profiles-resources.json', encoding='utf8', mode='r') as f: 
    fhir_profiles_resources_json = json.load(f)
 
-
 # Set hyperparameters
-input_dim = 100  # Dimension of the random noise input for the generator
-output_dim = 100  # Dimension of the generated output
+input_dim = 1  # Dimension of the random noise input for the generator
+output_dim = 27 # Dimension of the generated output
 lr = 0.0002  # Learning rate
 batch_size = 64  # Batch size for training
 
@@ -150,15 +150,15 @@ for epoch in range(num_epochs):
         batch_size = real_data.size(0)
         # Train discriminator with real data
         discriminator.zero_grad()
-        real_labels = torch.ones(batch_size, 1)
+        real_labels = torch.ones(batch_size, 1, 1).to(device)
         real_output = discriminator(real_data)
         real_loss = criterion(real_output, real_labels)
         real_loss.backward()
 
         # Train discriminator with generated data
-        noise = torch.randn(batch_size, input_dim)
+        noise = torch.randn(batch_size, input_dim).to(device)
         fake_data = generator(noise).detach()
-        fake_labels = torch.zeros(batch_size, 1)
+        fake_labels = torch.zeros(batch_size, 1).to(device)
         fake_output = discriminator(fake_data)
         fake_loss = criterion(fake_output, fake_labels)
         fake_loss.backward()
