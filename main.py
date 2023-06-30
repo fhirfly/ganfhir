@@ -127,7 +127,7 @@ with open('fhir/profiles-resources.json', encoding='utf8', mode='r') as f:
 input_dim = 1  # Dimension of the random noise input for the generator
 output_dim = 27 # Dimension of the generated output
 lr = 0.0002  # Learning rate
-batch_size = 64  # Batch size for training
+batch_size = 1000  # Batch size for training
 
 device = torch.device("cuda:0")
 
@@ -145,10 +145,9 @@ dataset = FHIRDataset('data/Patient.ndjson')
 dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 # Training loop
-num_epochs = 100
+num_epochs = 200
 for epoch in range(num_epochs):
     for batch_idx, real_data in enumerate(dataloader):
-        batch_size = real_data.size(0)
         # Train discriminator with real data
         discriminator.zero_grad()
         real_labels = torch.ones(batch_size, 1, 1).to(device)
@@ -175,16 +174,16 @@ for epoch in range(num_epochs):
         generator_loss.backward()
         generator_optimizer.step()
 
-
-        print(
-            f"Epoch [{epoch + 1}/{num_epochs}], "
-            f"Batch [{batch_idx}/{len(dataloader)}], "
-            f"Discriminator Loss: {discriminator_loss.item():.4f}, "
-            f"Generator Loss: {generator_loss.item():.4f}"
-        )
-        # Print the generated text after each epoch
-        generated_text = noise[0].detach().cpu().numpy()  # Convert tensor to numpy array
-        print(f"Epoch [{epoch+1}/{num_epochs}], Generated Text: {generated_text}")
+        if batch_idx % 100 == 0: #Only print the stats on the batch
+            print(
+                f"Epoch [{epoch + 1}/{num_epochs}], "
+                f"Batch complete with [{batch_size} passes, "
+                f"Discriminator Loss: {discriminator_loss.item():.4f}, "
+                f"Generator Loss: {generator_loss.item():.4f}"
+            )
+            # Print the generated text after each epoch
+            generated_text = noise[0].detach().cpu().numpy()  # Convert tensor to numpy array
+            print(f"Generated Text: {generated_text}")
 
 # Save trained models
 torch.save(generator.state_dict(), 'generator.pth')
