@@ -186,7 +186,7 @@ for epoch in range(num_epochs):
                 f"Epoch [{epoch + 1}/{num_epochs}], "
                 f"Batch complete with [{batch_size} passes, "
                 f"Discriminator Loss: {discriminator_loss.item():.4f}, "
-                f"Generator Loss: {generator_loss.item():.4f}"
+""                f"Generator Loss: {generator_loss.item():.4f}"
             )
             # Print the generated text after each epoch
             generated_text = fake_data[0].detach().cpu().numpy()  # Convert tensor to numpy array
