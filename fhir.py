@@ -1,52 +1,50 @@
 import torch
 import torch.nn as nn
+import json
+from gan import Generator, input_dim, output_dim, device, date_to_one_hot, get_concept_index_from_codesystem
 
-# Define the Generator model
-class Generator(nn.Module):
-    def __init__(self, input_dim, output_dim):
-        super(Generator, self).__init__()
-        self.model = nn.Sequential(
-            nn.Linear(input_dim, 128),
-            nn.LeakyReLU(0.2),
-            nn.Linear(128, 256),
-            nn.LeakyReLU(0.2),
-            nn.Linear(256, output_dim),
-            nn.Tanh()
-        )
+# Load the FHIR ValueSets and Profiles-Resources JSON data
+with open('fhir/valuesets.json', encoding='utf8', mode='r') as f:
+    fhir_value_set = json.load(f)
 
-    def forward(self, x):
-        return self.model(x)
+with open('fhir/profiles-resources.json', encoding='utf8', mode='r') as f:
+    fhir_profiles_resources_json = json.load(f)
 
-# Assume we've trained the GAN at this point, so we have a trained generator
-# To generate text, we start with a random noise vector
-noise = torch.randn(1, 1)
-# Create the generator
-netG = Generator(1,27)
-# Load the generator's trained weights (not provided here)
-netG.load_state_dict(torch.load("generator.pth"))
-# Generate a sequence of characters
-char_probs = netG(noise)
-# Choose the most probable character at each position
-_, generated_sequence = torch.max(char_probs, dim=1)
-# This will be a sequence of numbers; you would need a mapping from numbers to characters
-# to convert this to human-readable text
-print(generated_sequence)
+# Load the pre-trained generator model
+generator = Generator(input_dim, output_dim).to(device)
+generator.load_state_dict(torch.load('generator.pth'))
+generator.eval()
 
-# Suppose you have the following list of characters that you used to train your GAN:
-chars = [' ', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
-         'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A',
-         'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',
-         'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2',
-         '3', '4', '5', '6', '7', '8', '9', '!', '?', '.', ',', '-', ':', ';',
-         '(', ')', '[', ']', '{', '}', '"', "'", '@', '#', '$', '%', '^', '&',
-         '*', '_', '+', '=', '|', '~', '<', '>', '/']
+# Function to generate patient data using the generator model
+def generate_patient_data(num_samples):
+    generated_data = []
+    with torch.no_grad():
+        for _ in range(num_samples):
+            noise = torch.randn(1, input_dim).to(device)
+            fake_data = generator(noise)
+            generated_data.append(fake_data.cpu().numpy()[0])
 
-# Create a mapping from integers to characters:
-int_to_char = dict(enumerate(chars))
+    return generated_data
 
-# Let's say generated_sequence is your output tensor from the GAN.
-generated_list = generated_sequence.tolist()
+if __name__ == "__main__":
+    # Set the number of patient data samples to generate
+    num_samples_to_generate = 10
 
-# Convert the sequence of integers to a sequence of characters
-generated_text = ''.join(int_to_char[i] for i in generated_list)
-print(generated_text)
+    # Generate patient data using the generator model
+    generated_patient_data = generate_patient_data(num_samples_to_generate)
+
+    # Process and print the generated patient data
+    for idx, data in enumerate(generated_patient_data):
+        print(f"Generated Patient Data {idx + 1}:")
+        for i, value in enumerate(data):
+            # Handle one-hot encoded date values
+            if i >= 1 and i <= 36:
+                year, month, day = value.argmax(), value[100:112].argmax(), value[112:].argmax()
+                date_str = f"{year + 1900}-{str(month + 1).zfill(2)}-{str(day + 1).zfill(2)}"
+                print(f"Date: {date_str}")
+            else:
+                # Fetch value from the FHIR ValueSet for categorical values
+                concept_index = int(value)
+                concept_code = fhir_value_set['entry'][concept_index]['resource']['concept'][0]['code']
+                print(f"Concept Index {i}: {concept_index}, Concept Code: {concept_code}")
+        print("-----")
