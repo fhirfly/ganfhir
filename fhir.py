@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import json
-from gan import Generator, input_dim, output_dim, device, date_to_one_hot, get_concept_index_from_codesystem
+from gan import Generator, input_dim, output_dim, device, get_concept_index_from_codesystem
 
 # Load the FHIR ValueSets and Profiles-Resources JSON data
 with open('fhir/valuesets.json', encoding='utf8', mode='r') as f:
@@ -25,6 +25,29 @@ def generate_patient_data(num_samples):
             generated_data.append(fake_data.cpu().numpy()[0])
 
     return generated_data
+
+def date_to_one_hot(date):
+    # Convert the input date to a tensor if it's not already one
+    if not isinstance(date, torch.Tensor):
+        date = torch.tensor(date)
+
+    # Split the date tensor into year, month, and day components
+    year, month, day = date[0:100].argmax(), date[100:112].argmax(), date[112:].argmax()
+
+    # Define the possible values for year, month, and day
+    years = [str(i) for i in range(1900, 2101)]  # You can adjust the range of years as needed
+    months = [str(i).zfill(2) for i in range(1, 13)]
+    days_in_month = [str(i).zfill(2) for i in range(1, 32)]
+
+    # Create the one-hot encoded vectors for year, month, and day
+    year_vector = [1 if year == y else 0 for y in years]
+    month_vector = [1 if month == m else 0 for m in months]
+    day_vector = [1 if day == d else 0 for d in days_in_month]
+
+    # Combine the one-hot encoded vectors into a single vector
+    one_hot_vector = year_vector + month_vector + day_vector
+
+    return one_hot_vector
 
 if __name__ == "__main__":
     # Set the number of patient data samples to generate (use the same batch size as in the GAN model training)
