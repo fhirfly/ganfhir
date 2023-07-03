@@ -90,9 +90,6 @@ def fhir_resource_to_tensor(fhir_resource_json, fhir_resource, fhir_profile_reso
     return tensor.to(device)
 
 def date_to_one_hot(date):
-    # Convert the input date to a tensor if it's not already one
-    if not isinstance(date, torch.Tensor):
-        date = torch.tensor(date)
     # Split the date string into year, month, and day components
     year, month, day = date.split('-')
 
