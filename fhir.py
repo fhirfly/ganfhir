@@ -47,17 +47,17 @@ if __name__ == "__main__":
     generated_patient_data = generate_patient_data(num_samples_to_generate)
     print (generated_patient_data)
     # Process and print the generated patient data
-    for idx, data in enumerate(generated_patient_data):
-        print(f"Generated Patient Data {idx + 1}:")
-        for i, value in enumerate(data):
-            # Handle the date value
-            if i == 0:
-                date = torch.tensor([value], device=device)  # Create tensor with unsqueezed value
-                date_str = date_to_one_hot(date)
-                print(f"Date: {date_str}")
-            else:
-                # Fetch value from the FHIR ValueSet for categorical values
-                concept_index = int(value)
-                concept_code = fhir_value_set['entry'][concept_index]['resource']['concept'][0]['code']
-                print(f"Concept Index {i}: {concept_index}, Concept Code: {concept_code}")
-        print("-----")
+    # for idx, data in enumerate(generated_patient_data):
+    #     print(f"Generated Patient Data {idx + 1}:")
+    #     for i, value in enumerate(data):
+    #         # Handle the date value
+    #         if i == 0:
+    #             date = torch.tensor([value], device=device)  # Create tensor with unsqueezed value
+    #             date_str = date_to_one_hot(date)
+    #             print(f"Date: {date_str}")
+    #         else:
+    #             # Fetch value from the FHIR ValueSet for categorical values
+    #             concept_index = int(value)
+    #             concept_code = fhir_value_set['entry'][concept_index]['resource']['concept'][0]['code']
+    #             print(f"Concept Index {i}: {concept_index}, Concept Code: {concept_code}")
+    #     print("-----")
