@@ -158,7 +158,7 @@ def train_gan(generator, discriminator, dataloader, num_epochs, device):
             generator.zero_grad()
             real_labels.fill_(1)  # Reset real_labels to 1s for the generator loss
             fake_output = discriminator(fake_data)
-            generator_loss = criterion(fake_output, real_labels)
+            generator_loss = criterion(fake_output.squeeze(), real_labels.squeeze())
             generator_loss.backward()
             generator_optimizer.step()
 
