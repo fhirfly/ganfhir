@@ -45,7 +45,7 @@ if __name__ == "__main__":
 
     # Generate patient data using the generator model
     generated_patient_data = generate_patient_data(num_samples_to_generate)
-
+    print (generated_patient_data)
     # Process and print the generated patient data
     for idx, data in enumerate(generated_patient_data):
         print(f"Generated Patient Data {idx + 1}:")
