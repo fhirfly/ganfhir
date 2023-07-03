@@ -27,9 +27,13 @@ def generate_patient_data(num_samples):
     return generated_data
 
 def date_to_one_hot(date):
-    print ("date inside date_to_one_hot", date)
-    # Split the date tensor into year, month, and day components
-    year, month, day = date[:100].argmax().item(), date[100:112].argmax().item(), date[112:].argmax().item()
+    print("date inside date_to_one_hot", date)
+    # Check if the date tensor has only one element
+    if date.numel() == 1:
+        date = date.item()  # Convert the tensor to a scalar
+
+    # Split the date into year, month, and day components
+    year, month, day = int(date * 100), int((date * 100) % 100), int((date * 10000) % 100)
 
     # Define the possible values for year, month, and day
     years = [str(i) for i in range(1900, 2101)]  # You can adjust the range of years as needed
