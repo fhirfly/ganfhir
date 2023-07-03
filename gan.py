@@ -4,6 +4,9 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 import torchtext.utils as tutils
 import json
+import os
+import collections.abc
+import math
 
 # Define the Generator model
 class Generator(nn.Module):
@@ -69,7 +72,6 @@ def fhir_resource_to_tensor(fhir_resource_json, fhir_resource, fhir_profile_reso
     elements = fhir_profile_resource['resource'].get('differential')['element'][1:]  #the first elelemt is the resource itself, so skip that
     # Create an empty tensor with the shape of the elements
     tensor_shape = (1, len(elements))
-    output_dim = len(elements)
     tensor = torch.empty(tensor_shape)      
     # Iterate through the elements and populate the tensor
     for i, element in enumerate(elements):
@@ -77,6 +79,14 @@ def fhir_resource_to_tensor(fhir_resource_json, fhir_resource, fhir_profile_reso
         value = fhir_resource_json.get(fhir_element, None)
         if value is not None:
             if isinstance(value, list):
+                tensor[0,i] = torch.tensor(len(value))
+            elif isinstance(value, dict):
+                tensor[0,i] = torch.tensor(len(value))
+            elif isinstance(value, collections.abc.Sequence):
+                tensor[0,i] = torch.tensor(len(value))
+            elif element.get('type')[0].get('code') == 'CodeableConcept':
+                tensor[0,i] = torch.tensor(len(value))
+            elif isinstance(value, str):
                 tensor[0,i] = torch.tensor(len(value))
             elif element.get('type')[0].get('code') == 'date':
                 tensor[0,i] = torch.tensor(len(date_to_one_hot(value)))
@@ -117,83 +127,98 @@ def get_concept_index_from_codesystem(fhir_value_set, fhir_value_set_url, concep
                     return concept_index
                 concept_index +=1
 
+def get_outside_dimension(fhir_profiles_resources_json, resourceName):
+    for i, entry in enumerate(fhir_profiles_resources_json.get('entry')):
+        if (entry['resource'].get('id')==resourceName):
+            return len(fhir_profiles_resources_json.get('entry')[i].get('resource'))
+
 with open('fhir/valuesets.json', encoding='utf8', mode='r') as f: 
     fhir_value_set = json.load(f)
 
 with open('fhir/profiles-resources.json', encoding='utf8', mode='r') as f: 
    fhir_profiles_resources_json = json.load(f)
 
-# Set hyperparameters
-input_dim = 1  # Dimension of the random noise input for the generator
-output_dim = 27 # Dimension of the generated output
-lr = 0.0002  # Learning rate
-batch_size = 1000  # Batch size for training
-
-device = torch.device("cuda:0")
-
-# Initialize generator and discriminator
-generator = Generator(input_dim, output_dim).to(device)
-discriminator = Discriminator(output_dim).to(device)
-
-# Define loss function and optimizers
-criterion = nn.BCELoss()
-generator_optimizer = optim.Adam(generator.parameters(), lr=lr)
-discriminator_optimizer = optim.Adam(discriminator.parameters(), lr=lr)
 
 # Load the FHIR dataset
-dataset = FHIRDataset('data/Patient.ndjson')
-dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+for file in os.listdir('data/'):
+    # Set hyperparameters
+    input_dim = 1  # Dimension of the random noise input for the generator
+    #fhir_profile_resource = resource_from_profile(self.data[index].get('resourceType'), fhir_profiles_resources_json)
+    
+    output_dim = get_outside_dimension(fhir_profiles_resources_json, file.split('.')[0])# Dimension of the generated output
+    lr = 0.0002  # Learning rate
+    line_count = 0
+    with open('data/' + file) as f:
+        for i, _ in enumerate(f):
+            pass
+            line_count += 1
+    batch_size = math.floor(line_count/100)  # Batch size for training
 
-# Training loop
-num_epochs = 200
-for epoch in range(num_epochs):
-    for batch_idx, real_data in enumerate(dataloader):
-        real_data = real_data.to(device)
-        
-        # Train discriminator with real data
-        discriminator.zero_grad()
-        real_labels = torch.ones(batch_size, 1, 1).to(device)
-        real_output = discriminator(real_data)
-        real_loss = criterion(real_output, real_labels)
-        real_loss.backward()
-        real_cpu = real_data[0].to(device)
+    device = torch.device("cuda:0")
 
-        # Train discriminator with generated data
-        noise = torch.randn(batch_size, input_dim).to(device)
-        fake_data = generator(noise).detach()
-        fake_labels = torch.zeros(batch_size, 1).to(device)
-        fake_output = discriminator(fake_data)
-        fake_loss = criterion(fake_output, fake_labels)
-        fake_loss.backward()
-        discriminator_loss = real_loss + fake_loss
-        discriminator_optimizer.step()
-        
-        # Clip discriminator's gradients
-        for p in discriminator.parameters():
-            p.data.clamp_(-0.01, 0.01)
+    # Initialize generator and discriminator
+    generator = Generator(input_dim, output_dim).to(device)
+    discriminator = Discriminator(output_dim).to(device)
 
-        # Train generator
-        generator.zero_grad()
-        # Use inverted labels for generator loss
-        real_labels.fill_(1)
-        fake_output = discriminator(fake_data)
-        generator_loss = criterion(fake_output.squeeze(), real_labels.squeeze())
-        generator_loss.backward()
-        generator_optimizer.step()
+    # Define loss function and optimizers
+    criterion = nn.BCELoss()
+    generator_optimizer = optim.Adam(generator.parameters(), lr=lr)
+    discriminator_optimizer = optim.Adam(discriminator.parameters(), lr=lr)
 
-        if batch_idx % 100 == 0: #Only print the stats on the batch
-            print(
-                f"Epoch [{epoch + 1}/{num_epochs}], "
-                f"Batch complete with [{batch_size} passes, "
-                f"Discriminator Loss: {discriminator_loss.item():.4f}, "
-""                f"Generator Loss: {generator_loss.item():.4f}"
-            )
-            # Print the generated text after each epoch
-            generated_text = fake_data[0].detach().cpu().numpy()  # Convert tensor to numpy array
-            # Convert the sequence of integers to a sequence of characters
-            generated_list = generated_text.tolist()
-            #generated_text = ''.join(int_to_char[i] for i in generated_list)
-            print(f"Generated Text: {generated_text}")
+
+    dataset = FHIRDataset('./data/' + file)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+    # Training loop
+    num_epochs = 200
+    for epoch in range(num_epochs):
+        for batch_idx, real_data in enumerate(dataloader):
+            real_data = real_data.to(device)
+            
+            # Train discriminator with real data
+            discriminator.zero_grad()
+            real_labels = torch.ones(batch_size, 1, 1).to(device)
+            real_output = discriminator(real_data)
+            real_loss = criterion(real_output, real_labels)
+            real_loss.backward()
+            real_cpu = real_data[0].to(device)
+
+            # Train discriminator with generated data
+            noise = torch.randn(batch_size, input_dim).to(device)
+            fake_data = generator(noise).detach()
+            fake_labels = torch.zeros(batch_size, 1).to(device)
+            fake_output = discriminator(fake_data)
+            fake_loss = criterion(fake_output, fake_labels)
+            fake_loss.backward()
+            discriminator_loss = real_loss + fake_loss
+            discriminator_optimizer.step()
+            
+            # Clip discriminator's gradients
+            for p in discriminator.parameters():
+                p.data.clamp_(-0.01, 0.01)
+
+            # Train generator
+            generator.zero_grad()
+            # Use inverted labels for generator loss
+            real_labels.fill_(1)
+            fake_output = discriminator(fake_data)
+            generator_loss = criterion(fake_output.squeeze(), real_labels.squeeze())
+            generator_loss.backward()
+            generator_optimizer.step()
+
+            if batch_idx % 100 == 0: #Only print the stats on the batch
+                print(
+                    f"Epoch [{epoch + 1}/{num_epochs}], "
+                    f"Batch complete with [{batch_size} passes, "
+                    f"Discriminator Loss: {discriminator_loss.item():.4f}, "
+    ""                f"Generator Loss: {generator_loss.item():.4f}"
+                )
+                # Print the generated text after each epoch
+                generated_text = fake_data[0].detach().cpu().numpy()  # Convert tensor to numpy array
+                # Convert the sequence of integers to a sequence of characters
+                generated_list = generated_text.tolist()
+                #generated_text = ''.join(int_to_char[i] for i in generated_list)
+                print(f"Generated Text: {generated_text}")
 
 # Save trained models
 torch.save(generator.state_dict(), 'generator.pth')
