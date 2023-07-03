@@ -32,7 +32,7 @@ def date_to_one_hot(date):
         date = torch.tensor(date)
 
     # Split the date tensor into year, month, and day components
-    year, month, day = date[0:100].argmax(), date[100:112].argmax(), date[112:].argmax()
+    year, month, day = date[0][0:100].argmax().item(), date[0][100:112].argmax().item(), date[0][112:].argmax().item()
 
     # Define the possible values for year, month, and day
     years = [str(i) for i in range(1900, 2101)]  # You can adjust the range of years as needed
@@ -40,9 +40,9 @@ def date_to_one_hot(date):
     days_in_month = [str(i).zfill(2) for i in range(1, 32)]
 
     # Create the one-hot encoded vectors for year, month, and day
-    year_vector = [1 if year == y else 0 for y in years]
-    month_vector = [1 if month == m else 0 for m in months]
-    day_vector = [1 if day == d else 0 for d in days_in_month]
+    year_vector = [1 if year == int(y) else 0 for y in years]
+    month_vector = [1 if month == int(m) else 0 for m in months]
+    day_vector = [1 if day == int(d) else 0 for d in days_in_month]
 
     # Combine the one-hot encoded vectors into a single vector
     one_hot_vector = year_vector + month_vector + day_vector
@@ -62,8 +62,8 @@ if __name__ == "__main__":
         for i, value in enumerate(data):
             # Handle one-hot encoded date values
             if i >= 1 and i <= 36:
-                year, month, day = value.argmax(), value[100:112].argmax(), value[112:].argmax()
-                date_str = f"{year + 1900}-{str(month + 1).zfill(2)}-{str(day + 1).zfill(2)}"
+                date = torch.tensor(value).unsqueeze(0).to(device)
+                date_str = date_to_one_hot(date)
                 print(f"Date: {date_str}")
             else:
                 # Fetch value from the FHIR ValueSet for categorical values
