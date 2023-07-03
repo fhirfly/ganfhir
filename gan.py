@@ -90,6 +90,9 @@ def fhir_resource_to_tensor(fhir_resource_json, fhir_resource, fhir_profile_reso
     return tensor.to(device)
 
 def date_to_one_hot(date):
+    # Convert the input date to a tensor if it's not already one
+    if not isinstance(date, torch.Tensor):
+        date = torch.tensor(date)
     # Split the date string into year, month, and day components
     year, month, day = date.split('-')
 
@@ -123,7 +126,7 @@ with open('fhir/valuesets.json', encoding='utf8', mode='r') as f:
 with open('fhir/profiles-resources.json', encoding='utf8', mode='r') as f: 
    fhir_profiles_resources_json = json.load(f)
 
-# Set hyperparameters
+# Set input dim
 input_dim = 1  # Dimension of the random noise input for the generator
 output_dim = 27 # Dimension of the generated output
 lr = 0.0002  # Learning rate

@@ -27,8 +27,8 @@ def generate_patient_data(num_samples):
     return generated_data
 
 if __name__ == "__main__":
-    # Set the number of patient data samples to generate
-    num_samples_to_generate = 10
+    # Set the number of patient data samples to generate (use the same batch size as in the GAN model training)
+    num_samples_to_generate = 1000
 
     # Generate patient data using the generator model
     generated_patient_data = generate_patient_data(num_samples_to_generate)
