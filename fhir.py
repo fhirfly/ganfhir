@@ -28,12 +28,8 @@ def generate_patient_data(num_samples):
 
 def date_to_one_hot(date):
     print ("date inside date_to_one_hot", date)
-    # # Convert the input date to a tensor if it's not already one
-    # if not isinstance(date, torch.Tensor):
-    #     date = torch.tensor(date)
-
     # Split the date tensor into year, month, and day components
-    year, month, day = date[0:100].argmax().item(), date[100:112].argmax().item(), date[112:].argmax().item()
+    year, month, day = date[0, :100].argmax().item(), date[0, 100:112].argmax().item(), date[0, 112:].argmax().item()
 
     # Define the possible values for year, month, and day
     years = [str(i) for i in range(1900, 2101)]  # You can adjust the range of years as needed
@@ -63,7 +59,7 @@ if __name__ == "__main__":
         for i, value in enumerate(data):
             # Handle one-hot encoded date values
             if i == 0:
-                date = torch.tensor(value).unsqueeze(0).to(device)  # Add unsqueeze here to add batch_size dimension
+                date = torch.tensor([value], device=device)  # Create tensor with unsqueezed value
                 date_str = date_to_one_hot(date)
                 print(f"Date: {date_str}")
             else:
