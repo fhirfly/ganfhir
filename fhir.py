@@ -27,7 +27,6 @@ def generate_patient_data(num_samples):
     return generated_data
 
 def date_to_one_hot(date):
-    # print("date inside date_to_one_hot", date)
     # Check if the date tensor has only one element
     if date.numel() == 1:
         date = date.item()  # Convert the tensor to a scalar
@@ -35,20 +34,10 @@ def date_to_one_hot(date):
     # Split the date into year, month, and day components
     year, month, day = int(date * 100), int((date * 100) % 100), int((date * 10000) % 100)
 
-    # Define the possible values for year, month, and day
-    years = [str(i) for i in range(1900, 2101)]  # You can adjust the range of years as needed
-    months = [str(i).zfill(2) for i in range(1, 13)]
-    days_in_month = [str(i).zfill(2) for i in range(1, 32)]
+    # Create the date string in the format "YYYY-MM-DD"
+    date_str = f"{year:04d}-{month:02d}-{day:02d}"
 
-    # Create the one-hot encoded vectors for year, month, and day
-    year_vector = [1 if year == int(y) else 0 for y in years]
-    month_vector = [1 if month == int(m) else 0 for m in months]
-    day_vector = [1 if day == int(d) else 0 for d in days_in_month]
-
-    # Combine the one-hot encoded vectors into a single vector
-    one_hot_vector = year_vector + month_vector + day_vector
-
-    return one_hot_vector
+    return date_str
 
 if __name__ == "__main__":
     # Set the number of patient data samples to generate (use the same batch size as in the GAN model training)
@@ -61,7 +50,7 @@ if __name__ == "__main__":
     for idx, data in enumerate(generated_patient_data):
         print(f"Generated Patient Data {idx + 1}:")
         for i, value in enumerate(data):
-            # Handle one-hot encoded date values
+            # Handle the date value
             if i == 0:
                 date = torch.tensor([value], device=device)  # Create tensor with unsqueezed value
                 date_str = date_to_one_hot(date)
