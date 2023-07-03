@@ -173,19 +173,18 @@ def train_gan(generator, discriminator, dataloader, num_epochs, device):
                 #generated_text = ''.join(int_to_char[i] for i in generated_list)
                 print(f"Generated Text: {generated_text}")
 
+# Set input dim
+input_dim = 1  # Dimension of the random noise input for the generator
+output_dim = 27  # Dimension of the generated output
+# Device configuration
+sdevice = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # Entry point of the script
 if __name__ == "__main__":
-    # Set input dim
-    input_dim = 1  # Dimension of the random noise input for the generator
-    output_dim = 27  # Dimension of the generated output
 
     # Set other training parameters
     lr = 0.0002  # Learning rate
     batch_size = 1000  # Batch size for training
     num_epochs = 200
-
-    # Device configuration
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # Initialize generator and discriminator
     generator = Generator(input_dim, output_dim).to(device)
