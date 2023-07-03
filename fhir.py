@@ -27,7 +27,7 @@ def generate_patient_data(num_samples):
     return generated_data
 
 def date_to_one_hot(date):
-    print("date inside date_to_one_hot", date)
+    # print("date inside date_to_one_hot", date)
     # Check if the date tensor has only one element
     if date.numel() == 1:
         date = date.item()  # Convert the tensor to a scalar
