@@ -4,10 +4,14 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 import torchtext.utils as tutils
 import json
+import fhirtorch
+import torch.nn.functional as F
+from torch.nn.utils.rnn import pad_sequence
+from torch.nn.functional import pad
 
 # Define the Generator model
 class Generator(nn.Module):
-    def __init__(self, input_dim, output_dim):
+    def __init__(self, input_dim, hidden_dim, output_dim):
         super(Generator, self).__init__()
         self.model = nn.Sequential(
             nn.Linear(input_dim, 128),
@@ -17,20 +21,26 @@ class Generator(nn.Module):
             nn.Linear(256, output_dim),
             nn.Tanh()
         )
+       
+        self.layer1 = nn.Linear(input_dim, hidden_dim)
+        self.layer2 = nn.Linear(hidden_dim, output_dim)
+
 
     def forward(self, x):
-        return self.model(x)
+        x = F.relu(self.layer1(x))
+        x = self.layer2(x)
+        return x
 
 # Define the Discriminator model
 class Discriminator(nn.Module):
-    def __init__(self, input_dim):
+    def __init__(self, input_dim, hidden_dim, output_dim):
         super(Discriminator, self).__init__()
         self.model = nn.Sequential(
-            nn.Linear(input_dim, 256),
+            nn.Linear(input_dim, hidden_dim),
             nn.LeakyReLU(0.2),
-            nn.Linear(256, 128),
+            nn.Linear(hidden_dim, hidden_dim),
             nn.LeakyReLU(0.2),
-            nn.Linear(128, 1),
+            nn.Linear(hidden_dim, output_dim),
             nn.Sigmoid()
         )
 
@@ -50,73 +60,9 @@ class FHIRDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, index):
-        fhir_profile_resource = resource_from_profile(self.data[index].get('resourceType'), fhir_profiles_resources_json)
-        return fhir_resource_to_tensor(self.data[index], self.data[index].get('resourceType'), fhir_profile_resource, fhir_value_set)  # Assuming each line is a tensor
-
-def resource_from_profile(fhir_resource, fhir_profiles_resources):
-    for i, resource in enumerate(fhir_profiles_resources['entry']):
-        if resource['resource'].get('id')==fhir_resource:
-            return resource
-
-#Convert FHIR to Tensor
-def fhir_resource_to_tensor(fhir_resource_json, fhir_resource, fhir_profile_resource, fhir_value_set):
-    # Parse the FHIR resource
-    #fhir_resource = fhir_types.fhir_resource(fhir_resource)
-
-    # Get the list of elements from the StructureDefinition for the current resource type
+        print('converting fhir data for patient ' + str(index) + ' to tensor.....')
+        return fhirtorch.fhir_to_tensor(self.data[index])
     
-    elements = fhir_profile_resource['resource'].get('differential')['element'][1:]  #the first elelemt is the resource itself, so skip that
-    # Create an empty tensor with the shape of the elements
-    tensor_shape = (1, len(elements))
-    output_dim = len(elements)
-    tensor = torch.empty(tensor_shape)      
-    # Iterate through the elements and populate the tensor
-    for i, element in enumerate(elements):
-        fhir_element = element['id'].split('.')[1]
-        value = fhir_resource_json.get(fhir_element, None)
-        if value is not None:
-            if isinstance(value, list):
-                tensor[0,i] = torch.tensor(len(value))
-            elif element.get('type')[0].get('code') == 'date':
-                tensor[0,i] = torch.tensor(len(date_to_one_hot(value)))
-            elif element.get('type')[0].get('code') == 'CodeableConcept':
-                tensor[0,i] = torch.tensor(len(value))
-            else:  #if its a value from a valueset, get the index of the value gtom the FHIR valuesets
-                tensor[0,i] = torch.tensor(get_concept_index_from_codesystem(fhir_value_set, element['binding'].get('valueSet').split('|')[0], value))
-        else:
-            tensor[0,i] = -1
-
-    return tensor.to(device)
-
-
-def date_to_one_hot(date):
-    # Split the date string into year, month, and day components
-    year, month, day = date.split('-')
-
-    # Define the possible values for year, month, and day
-    years = [str(i) for i in range(1900, 2101)]  # You can adjust the range of years as needed
-    months = [str(i).zfill(2) for i in range(1, 13)]
-    days_in_month = [str(i).zfill(2) for i in range(1, 32)]
-
-    # Create the one-hot encoded vectors for year, month, and day
-    year_vector = [1 if year == y else 0 for y in years]
-    month_vector = [1 if month == m else 0 for m in months]
-    day_vector = [1 if day == d else 0 for d in days_in_month]
-
-    # Combine the one-hot encoded vectors into a single vector
-    one_hot_vector = year_vector + month_vector + day_vector
-
-    return one_hot_vector
-
-def get_concept_index_from_codesystem(fhir_value_set, fhir_value_set_url, concept_code):
-    for entry in fhir_value_set['entry']:
-        if entry['resource'].get('valueSet') == fhir_value_set_url:
-            concept_index = 0
-            for concept in entry['resource'].get('concept'):
-                if concept.get('code') == concept_code:
-                    return concept_index
-                concept_index +=1
-
 def train_gan(generator, discriminator, dataloader, num_epochs, device):
     # Check if the input data is empty
     if len(dataloader.dataset) == 0:
@@ -129,8 +75,9 @@ def train_gan(generator, discriminator, dataloader, num_epochs, device):
 
     # Training loop
     for epoch in range(num_epochs):
-        for batch_idx, real_data in enumerate(dataloader):
+        for batch_idx, (real_data, labels) in enumerate(dataloader):
             real_data = real_data.to(device)
+            if labels !=None: labels.to(device)
 
             # Train discriminator with real data
             discriminator.zero_grad()
@@ -172,31 +119,56 @@ def train_gan(generator, discriminator, dataloader, num_epochs, device):
                 generated_text = fake_data[0].detach().cpu().numpy()  # Convert tensor to numpy array
                 print(f"Generated Text: {generated_text}")
 
+    # Define a padding function that pads dimension 1 to max_dim1_size
+def pad_dim1_to_max(tensor, max_dim1_size):
+    padding = (0, max_dim1_size - tensor.size(1))
+    return pad(tensor, padding)
+    
+def collate_fn(batch):
+    # Check if each sample in your dataset is a tuple (data, label)
+    try:
+        data, labels = zip(*batch)
+        labels = torch.stack(labels)
+    except ValueError:
+        # If not, handle data only
+        data = batch
+        labels = None
+    #max_length = max([x.shape[0] for x in data])
+    # Your data processing here. For example, if your data is a list of tensors of different lengths, 
+    # you might want to pad them to the same length before stacking:
+    #data = [F.pad(x, (0, max_length - x.shape[0])) for x in data]  # assuming data is 1D
+    #data = pad_sequence([d.clone().detach().requires_grad_(True) for d in data], batch_first=True)
+    #data = torch.stack(data)
+    # Find the maximum length of data in dimension 1
+    max_dim1_size = max([d.size(1) for d in data])
+     # Apply the padding function to each data sample
+    data = [pad_dim1_to_max(d, max_dim1_size) for d in data]
+    # We also pad the sequences in the batch to the maximum length in dimension 0
+    data = pad_sequence(data, batch_first=True)
+    if labels !=None : labels = pad_sequence(labels, batch_first=True)
+    return data, labels
+
 # Set input dim
 input_dim = 1  # Dimension of the random noise input for the generator
-output_dim = 27  # Dimension of the generated output
+output_dim = 256  # Dimension of the generated output
 # Device configuration
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-with open('fhir/valuesets.json', encoding='utf8', mode='r') as f: 
-    fhir_value_set = json.load(f)
 
-with open('fhir/profiles-resources.json', encoding='utf8', mode='r') as f: 
-   fhir_profiles_resources_json = json.load(f)
 # Entry point of the script
 if __name__ == "__main__":
 
     # Set other training parameters
     lr = 0.0002  # Learning rate
-    batch_size = 1000  # Batch size for training
-    num_epochs = 200
+    batch_size = 50 # Batch size for training
+    num_epochs = 4000
 
     # Initialize generator and discriminator
-    generator = Generator(input_dim, output_dim).to(device)
-    discriminator = Discriminator(output_dim).to(device)
-
+    generator = Generator(input_dim, 1, output_dim).to(device)
+    discriminator = Discriminator(input_dim, 256, output_dim).to(device)
+    print('Loading the dataset.....')
     # Load the FHIR dataset
     dataset = FHIRDataset('data/Patient.ndjson')
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn, num_workers=3)
 
     # Define loss function and optimizers
     criterion = nn.BCELoss()
@@ -210,3 +182,14 @@ if __name__ == "__main__":
     torch.save(generator.state_dict(), 'generator.pth')
     torch.save(discriminator.state_dict(), 'discriminator.pth')
 
+class FHIRModel(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim):
+        super(FHIRModel, self).__init__()
+        
+        self.layer1 = nn.Linear(input_dim, hidden_dim)
+        self.layer2 = nn.Linear(hidden_dim, output_dim)
+
+    def forward(self, x):
+        x = F.relu(self.layer1(x))
+        x = self.layer2(x)
+        return x
