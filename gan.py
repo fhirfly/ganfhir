@@ -56,7 +56,7 @@ class FHIRDataset(Dataset):
         #print('converting fhir data for patient ' + str(index) + ' to tensor.....')
         return fhirtorch.fhir_to_tensor(self.data[index])
     
-def train_gan(device, dataloader, G_state, D_state):
+def train_gan(device, dataloader, D_state, G_state):
     # Check if the input data is empty
     if len(dataloader.dataset) == 0:
         raise ValueError("The input dataloader is empty. Please make sure it contains data.")
@@ -167,8 +167,8 @@ def train_gan(device, dataloader, G_state, D_state):
             report_interval = 0
             torch.save(
                     {
-                            'epoch': epoch,
-                            'model_state_dict': generator.state_dict(),
+                        'epoch': epoch,
+                        'model_state_dict': generator.state_dict(),
                         'optimizer_state_dict': optimizer_G.state_dict(), 
                         'loss': loss_G
                     }, 
