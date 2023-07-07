@@ -10,6 +10,7 @@ import json
 import fhirtorch
 from torch.optim import Adam
 import os
+#import jpype
 
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 torch.autograd.set_detect_anomaly(True)
@@ -59,18 +60,32 @@ def train_gan(device, dataloader):
         raise ValueError("The input dataloader is empty. Please make sure it contains data.")
     
     # Hyperparameters
-    batch_size = 32
+    batch_size = 16
     hidden_dim = 128
     lr = 0.001
-    num_epochs = 50
+    num_epochs = 1000
 
-
-
+    # Start JVM
+    #jpype.startJVM(jpype.getDefaultJVMPath(), '-ea', "-Djava.class.path=/path/to/your/java/class")
+    # Import the Java class
+    #ValidationClass = jpype.JClass("your.package.ValidationClass")
+    #validator = ValidationClass()
 
     # Training loop
     for epoch in range(num_epochs):
         for i, real_data in enumerate(dataloader):
-            # Prepare real data
+           
+            # Every nth batch (for example, every 10th), generate data for validation
+            #if i % 10 == 0:
+                #with torch.no_grad():
+                    #fake_data = generator(noise)
+                # Assuming your Java validation class has a method `isValid()` that returns True if data is valid
+                #We would have to deserialize the tensor to a dataframe and then a fhir resource object
+                #if validator.isValid(fake_data.tolist()):
+                    # If data is valid, append to the dataloader
+                    # Assuming your data loader dataset supports appending of new data
+                    #dataloader.dataset.data.append(fake_data.tolist())
+             
              # Prepare real data
             real_data = real_data.to(device)    
             # Update input_dim based on the size of the padded batch for each iteration
@@ -83,8 +98,8 @@ def train_gan(device, dataloader):
             
             # Define loss function and optimizers
             criterion = nn.BCELoss()
-            optimizer_G = torch.optim.Adam(generator.parameters(), lr=lr)
-            optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=lr)
+            optimizer_G = torch.optim.Adam(generator.parameters(), lr=lr, weight_decay=1e-5)
+            optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=lr, weight_decay=1e-5)
             # Train Discriminator
             optimizer_D.zero_grad()
 
@@ -103,6 +118,9 @@ def train_gan(device, dataloader):
             loss_D.backward()
             optimizer_D.step()
 
+            # Clip discriminator's gradients
+            #for p in discriminator.parameters():
+               # p.data.clamp_(-0.01, 0.01)
             # Train Generator
             optimizer_G.zero_grad()
 
@@ -121,6 +139,7 @@ def train_gan(device, dataloader):
                 print(f"Epoch [{epoch+1}/{num_epochs}] Batch [{i+1}/{len(dataloader)}] Loss D: {loss_D:.4f}, Loss G: {loss_G:.4f}")    
     torch.save(generator.state_dict(), 'generator.pth')
     torch.save(discriminator.state_dict(), 'discriminator.pth')
+    #jpype.shutdownJVM()
 
 def collate_fn(batch):
     # Assuming each item in the batch is a tensor representing a JSON data sample
