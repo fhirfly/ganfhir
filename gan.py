@@ -10,6 +10,7 @@ import json
 import fhirtorch
 from torch.optim import Adam
 import os
+import ganfhirchart
 #import jpype
 
 #os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
@@ -62,7 +63,10 @@ def train_gan(device, dataloader):
     # Hyperparameters
     batch_size = 16
     hidden_dim = 128
-    lr = 0.001
+    # You can set different learning rates
+    learning_rate_g = 0.00115
+    learning_rate_d = 0.000045
+
     num_epochs = 1000
 
     # Start JVM
@@ -70,7 +74,8 @@ def train_gan(device, dataloader):
     # Import the Java class
     #ValidationClass = jpype.JClass("your.package.ValidationClass")
     #validator = ValidationClass()
-
+    G_losses = []
+    D_losses = []
     # Training loop
     for epoch in range(num_epochs):
         for i, real_data in enumerate(dataloader):
@@ -98,8 +103,8 @@ def train_gan(device, dataloader):
             
             # Define loss function and optimizers
             criterion = nn.BCELoss()
-            optimizer_G = torch.optim.Adam(generator.parameters(), lr=lr, weight_decay=1e-5)
-            optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=lr, weight_decay=1e-5)
+            optimizer_G = torch.optim.Adam(generator.parameters(), lr=learning_rate_g, weight_decay=1e-5)
+            optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=learning_rate_d, weight_decay=1e-5)
             # Train Discriminator
             optimizer_D.zero_grad()
 
@@ -133,12 +138,37 @@ def train_gan(device, dataloader):
             loss_G = criterion(output, torch.ones_like(output).to(device))
             loss_G.backward()
             optimizer_G.step()
-
+            # After the end of each batch, we add the losses to our list.
+            D_losses.append(loss_D.item())
+            G_losses.append(loss_G.item())
             # Print loss values
             if i % 10 == 0:
-                print(f"Epoch [{epoch+1}/{num_epochs}] Batch [{i+1}/{len(dataloader)}] Loss D: {loss_D:.4f}, Loss G: {loss_G:.4f}")    
-    torch.save(generator.state_dict(), 'generator.pth')
-    torch.save(discriminator.state_dict(), 'discriminator.pth')
+                 # After the end of each epoch, we can calculate the average loss for that epoch.
+                avg_D_loss = sum(D_losses[-len(dataloader):]) / len(dataloader)
+                avg_G_loss = sum(G_losses[-len(dataloader):]) / len(dataloader)
+
+                print(f"Epoch [{epoch}/{num_epochs}] Loss D: {avg_D_loss}, Loss G: {avg_G_loss}")
+                torch.save(generator.state_dict(), 'generator.pth')
+                torch.save(discriminator.state_dict(), 'discriminator.pth')
+                torch.save(
+                            {
+                                'epoch': epoch,
+                                'model_state_dict': generator.state_dict(),
+                                'optimizer_state_dict': optimizer_G.state_dict(), 
+                                'loss': loss_G
+                            }, 
+                            './pre_trained/generator.pth'
+                )
+
+                torch.save({
+                            'epoch': epoch,
+                            'model_state_dict': discriminator.state_dict(),
+                            'optimizer_state_dict': optimizer_D.state_dict(),
+                            'loss': loss_D,
+                            }, './pre_trained/discriminator.pth')
+                
+                fhirtorch.tensor_to_fhir(fake_data.cpu())
+                ganfhirchart.plot_losses(G_losses, D_losses)
     #jpype.shutdownJVM()
 
 def collate_fn(batch):
