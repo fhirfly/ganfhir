@@ -98,7 +98,7 @@ def dataframe_to_tensor(df):
         #print(processed_df[column].dtype.name) 
         if processed_df[column].isna().any():
             # Impute numerical columns
-            
+            #this contain did not happen    
             num_imputer = SimpleImputer(strategy='mean')
             processed_df[column] = num_imputer.fit_transform(processed_df[[column]])
             #print(f'#######################################################Imputed Column {column}')
@@ -109,15 +109,15 @@ def dataframe_to_tensor(df):
             processed_df[column] = processed_df[column].astype('float64')
 
     #print_dataframe(processed_df)
-    empty_strings = (processed_df == '').any()
+    #empty_strings = (processed_df == '').any()
     #print(empty_strings)
 
     try:
         tensor = torch.tensor(processed_df.values, dtype=torch.float)
-        dcolumns = processed_df.columns
-        dindex = processed_df.index
-        df_from_tensor = pd.DataFrame(tensor.numpy(), columns=dcolumns, index=dindex)
-        #print('wow thats great##############################################')
+        #dcolumns = processed_df.columns
+        #dindex = processed_df.index
+        #df_from_tensor = pd.DataFrame(tensor.numpy(), columns=dcolumns, index=dindex)
+        #print('You can use the above to test whether the ##############################################')
         #print_dataframe(df_from_tensor)
     except:
         print(processed_df.dtypes)
@@ -130,8 +130,8 @@ def normalize_fhir(line):
         flat = flatten_json(line)
         df = pd.json_normalize(flat)
         # Store column names and index
-        columns = df.columns
-        index = df.index
+        #columns = df.columns
+        #index = df.index
         # Convert the DataFrame back to a JSON object
         #json_data = df.to_json(orient='records')
         #df = df.replace({'true': 1, 'false': 0})
@@ -179,8 +179,8 @@ def fhir_to_tensor(fhir):
     flat = flatten_json(fhir)
     df = pd.json_normalize(flat)
     # Store column names and index
-    columns = df.columns
-    index = df.index
+    # columns = df.columns
+    #index = df.index
     # Convert the DataFrame back to a JSON object
     #json_data = df.to_json(orient='records')
     #df = df.replace({'true': 1, 'false': 0})
