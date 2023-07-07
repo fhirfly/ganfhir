@@ -12,7 +12,7 @@ from torch.optim import Adam
 import os
 #import jpype
 
-os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+#os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 torch.autograd.set_detect_anomaly(True)
 # Generator
 class Generator(nn.Module):
