@@ -7,9 +7,10 @@ import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 from torch.nn.functional import pad
 import json
-import fhirtorch
 from torch.optim import Adam
 import os
+import time
+import fhirtorch
 import ganfhirchart
 #import jpype
 
@@ -55,7 +56,7 @@ class FHIRDataset(Dataset):
         #print('converting fhir data for patient ' + str(index) + ' to tensor.....')
         return fhirtorch.fhir_to_tensor(self.data[index])
     
-def train_gan(device, dataloader):
+def train_gan(device, dataloader, G_state, D_state):
     # Check if the input data is empty
     if len(dataloader.dataset) == 0:
         raise ValueError("The input dataloader is empty. Please make sure it contains data.")
@@ -77,7 +78,10 @@ def train_gan(device, dataloader):
     G_losses = []
     D_losses = []
     # Training loop
+    report_interval = 0 
     for epoch in range(num_epochs):
+        # Record the start time
+        start_time = time.time()
         for i, real_data in enumerate(dataloader):
            
             # Every nth batch (for example, every 10th), generate data for validation
@@ -96,11 +100,15 @@ def train_gan(device, dataloader):
             # Update input_dim based on the size of the padded batch for each iteration
             input_dim = real_data.size(2)
             output_dim = real_data.size(2)
+            # Load pre-trained models if they exist
 
             # Create Generator and Discriminator instances inside the training loop with updated input_dim
             generator = Generator(input_dim, hidden_dim, output_dim).to(device)
             discriminator = Discriminator(input_dim, hidden_dim).to(device)
             
+            if G_state and D_state:
+                generator.load_state_dict(G_state)
+                discriminator.load_state_dict(D_state)
             # Define loss function and optimizers
             criterion = nn.BCELoss()
             optimizer_G = torch.optim.Adam(generator.parameters(), lr=learning_rate_g, weight_decay=1e-5)
@@ -139,36 +147,44 @@ def train_gan(device, dataloader):
             loss_G.backward()
             optimizer_G.step()
             # After the end of each batch, we add the losses to our list.
-            D_losses.append(loss_D.item())
-            G_losses.append(loss_G.item())
-            # Print loss values
-            if i % 10 == 0:
-                 # After the end of each epoch, we can calculate the average loss for that epoch.
-                avg_D_loss = sum(D_losses[-len(dataloader):]) / len(dataloader)
-                avg_G_loss = sum(G_losses[-len(dataloader):]) / len(dataloader)
+        
+        #D_losses.append(loss_D.item())
+        #G_losses.append(loss_G.item())
+        # Print loss values           
+        # After the end of each epoch, we can calculate the average loss for that epoch.
+        #avg_D_loss = sum(D_losses[-len(dataloader):]) / len(dataloader)
+        #avg_G_loss = sum(G_losses[-len(dataloader):]) / len(dataloader)
+        # Record the end time
+        end_time = time.time()
 
-                print(f"Epoch [{epoch}/{num_epochs}] Loss D: {avg_D_loss}, Loss G: {avg_G_loss}")
-                torch.save(generator.state_dict(), 'generator.pth')
-                torch.save(discriminator.state_dict(), 'discriminator.pth')
-                torch.save(
-                            {
-                                'epoch': epoch,
-                                'model_state_dict': generator.state_dict(),
-                                'optimizer_state_dict': optimizer_G.state_dict(), 
-                                'loss': loss_G
-                            }, 
-                            './pre_trained/generator.pth'
-                )
+        # Calculate elapsed time
+        elapsed_time = end_time - start_time
 
-                torch.save({
+        # Print elapsed time
+        print(f'Epoch {epoch} completed in {elapsed_time} seconds')
+        print(f"Epoch [{epoch}/{num_epochs}] Last Loss D: {loss_D}, Last Loss G: {loss_G}")
+        if report_interval ==  5:
+            report_interval = 0
+            torch.save(
+                    {
                             'epoch': epoch,
-                            'model_state_dict': discriminator.state_dict(),
-                            'optimizer_state_dict': optimizer_D.state_dict(),
-                            'loss': loss_D,
-                            }, './pre_trained/discriminator.pth')
-                
-                fhirtorch.tensor_to_fhir(fake_data.cpu())
-                ganfhirchart.plot_losses(G_losses, D_losses)
+                            'model_state_dict': generator.state_dict(),
+                        'optimizer_state_dict': optimizer_G.state_dict(), 
+                        'loss': loss_G
+                    }, 
+                    './pre_trained/generator.pth'
+            )
+
+            torch.save({
+                        'epoch': epoch,
+                        'model_state_dict': discriminator.state_dict(),
+                        'optimizer_state_dict': optimizer_D.state_dict(),
+                        'loss': loss_D,
+                        }, './pre_trained/discriminator.pth')
+                        
+            #fhirtorch.tensor_to_fhir(fake_data.cpu())
+            #ganfhirchart.plot_losses(G_losses, D_losses)
+        else: report_interval = report_interval + 1
     #jpype.shutdownJVM()
 
 def collate_fn(batch):
@@ -189,12 +205,23 @@ def collate_fn(batch):
 
 # Entry point of the script
 if __name__ == "__main__":
-    batch_size =32
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # Define your directory to load pre-trained models
+    model_dir = 'pre_trained'
+    G_state = None
+    D_state = None
+
+    # Check if pre-trained model files exist
+    if os.path.exists(f'{model_dir}/discriminator.pth') and os.path.exists(f'{model_dir}/generator.pth'):
+        G_state = torch.load(f'{model_dir}/generator.pth')
+        D_state = torch.load(f'{model_dir}/discriminator.pth')
+        print("Pre-trained models found.")
+
+    batch_size =16
     print('Loading the dataset.....')
     # Load the FHIR dataset
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     dataset = FHIRDataset('data/Patient.ndjson')
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn, num_workers=12)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn, num_workers=4)
 
     # Train the GAN
-    train_gan(device, dataloader)
+    train_gan(device, dataloader, D_state, G_state)

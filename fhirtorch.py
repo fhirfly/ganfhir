@@ -12,6 +12,7 @@ from sklearn.impute import SimpleImputer
 import warnings
 import torch.nn.functional as F
 warnings.simplefilter(action='ignore', category=FutureWarning)
+import uuid
 
 def flatten_json(nested_json):
     out = {}
@@ -192,3 +193,25 @@ def fhir_to_tensor(fhir):
     #print(tensor)
     # Convert tensor back to DataFrame
     return tensor
+
+def tensor_to_fhir(tensor):
+    df = tensor_to_dataframe(tensor)
+     # Iterate through each row in the DataFrame
+    csvuuid = uuid.uuid4()
+    df.to_csv('./output/csv/' + str(csvuuid) + '.csv', sep='\t', encoding='utf-8') 
+    #for index, row in df.iterrows():
+        #print(f"Index: {index}")
+        #print(f"Row data: \n{row}")
+        #print("-----")
+        # Unnest each row and convert back to JSON
+        #fhiruuid = uuid.uuid4()
+        #unnested_json = df.apply(unnest_row, axis=1).to_json()
+        #fhir = json.dumps(json.loads(unnested_json), separators=(',', ':'))
+        # Writing to sample.json
+        #with open("./output/fhir/Patient/" + str(fhiruuid), "w", encoding='utf-8') as outfile:
+            #outfile.write(fhir)
+            #outfile.close()
+def tensor_to_dataframe(tensor):
+    df = pd.DataFrame(tensor.detach().numpy())
+    df.columns = range(len(df.columns))
+    return df
